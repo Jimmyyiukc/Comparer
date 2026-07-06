@@ -31,13 +31,7 @@ export default function App() {
       if (realTerms) params.set('rt', '1');
       if (lang !== 'fr') params.set('lang', lang);
       const qs = params.toString();
-      try {
-        window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-      } catch {
-        // Ouverture en local via file:// : origine opaque, replaceState lève une
-        // SecurityError. On ignore — la persistance dans l'URL est simplement
-        // indisponible dans ce mode hors-ligne.
-      }
+      window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
     }, 300);
     return () => window.clearTimeout(urlTimer.current);
   }, [inputs, realTerms, lang]);

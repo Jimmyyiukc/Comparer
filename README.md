@@ -32,27 +32,6 @@ npm test           # tests unitaires du moteur (Vitest)
 npm run build      # tsc + build de production
 ```
 
-## Prévisualiser en local / Local preview
-
-Trois façons de voir l'application :
-
-```bash
-# 1. Serveur de dev (édition + rechargement à chaud) :
-npm install && npm run dev        # ouvre http://localhost:5173
-
-# 2. Aperçu du build de production :
-npm run build && npm run preview
-
-# 3. Fichier unique autonome (aucun serveur, hors-ligne) :
-npm run build:single              # génère un seul dist/index.html
-#   → ouvrez dist/index.html directement dans un navigateur, ou partagez ce fichier.
-```
-
-Le fichier `dist/index.html` produit par `build:single` intègre tout le JS et le CSS
-(via `vite-plugin-singlefile`) : il s'ouvre par double-clic, sans Node ni serveur. En
-mode `file://`, la synchronisation de l'état dans l'URL est désactivée (origine opaque),
-mais toutes les fonctions du calculateur marchent normalement.
-
 ## Invariants vérifiés par les tests
 
 - Somme des amortissements mensuels + capital restant dû = prêt initial, **au centime**.
