@@ -7,6 +7,7 @@ import { SummaryStrip } from './components/SummaryStrip';
 import { HeroChart } from './components/HeroChart';
 import { SensitivityHeatmap } from './components/SensitivityHeatmap';
 import { CostBreakdown } from './components/CostBreakdown';
+import { BalanceSheet } from './components/BalanceSheet';
 import { HypothesesPanel } from './components/HypothesesPanel';
 import { Methodologie } from './components/Methodologie';
 import { copy, otherLang, parseLang, type Lang } from './i18n';
@@ -74,6 +75,7 @@ export default function App() {
       />
       <SensitivityHeatmap inputs={inputs} t={t.heatmap} />
       <CostBreakdown result={result} t={t.costs} />
+      <BalanceSheet result={result} t={t.balance} />
       <Methodologie t={t.method} />
 
       <footer className="colophon">

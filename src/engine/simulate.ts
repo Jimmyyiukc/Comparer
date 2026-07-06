@@ -3,7 +3,7 @@ import { buildAmortization } from './amortization';
 import { notaireFees } from './notaire';
 import { garantieCosts } from './garantie';
 import { runLedger } from './ledger';
-import { portfolioNetOfPfu } from './settlement';
+import { buildBalanceSheet } from './settlement';
 
 /**
  * Simulation complète : amortissement, frais d'acquisition, registre mensuel,
@@ -23,14 +23,35 @@ export function simulate(inputs: SimulationInputs): SimulationResult {
   const ledger = runLedger(inputs, schedule, garantie, initialOutlay);
   const last = ledger.points[ledger.points.length - 1];
 
-  const buyTerminalWealth = last.buyWealth;
-  const rentTerminalWealth = last.rentWealth;
+  // Bilans de sortie : capitaux propres = actifs − passif, nets des frais réalisés.
+  const buyBalanceSheet = buildBalanceSheet({
+    property: last.propertyValue,
+    investments: ledger.buyPortfolioValue,
+    investBasis: ledger.buyPortfolioBasis,
+    crd: last.crd,
+    sellingFees: last.propertyValue * inputs.sellingFeesRate,
+    ira: ledger.iraAtExit,
+    mainlevee: ledger.mainleveeAtExit,
+    fmgRestitution: ledger.fmgAtExit,
+    pfuEnabled: inputs.pfuEnabled,
+  });
+  const rentBalanceSheet = buildBalanceSheet({
+    property: 0,
+    investments: ledger.rentPortfolioValue,
+    investBasis: ledger.rentPortfolioBasis,
+    crd: 0,
+    sellingFees: 0,
+    ira: 0,
+    mainlevee: 0,
+    fmgRestitution: 0,
+    pfuEnabled: inputs.pfuEnabled,
+  });
 
-  const breakevenPoint = ledger.points.find((p) => p.month > 0 && p.buyWealth >= p.rentWealth);
+  const buyTerminalWealth = buyBalanceSheet.netEquity;
+  const rentTerminalWealth = rentBalanceSheet.netEquity;
 
-  const pfuPaidRent =
-    ledger.rentPortfolioValue -
-    portfolioNetOfPfu(ledger.rentPortfolioValue, ledger.rentPortfolioBasis, inputs.pfuEnabled);
+  // Croisement comparé sur les patrimoines nets de sortie (comparable des deux côtés).
+  const breakevenPoint = ledger.points.find((p) => p.month > 0 && p.buyNetWealth >= p.rentNetWealth);
 
   return {
     inputs,
@@ -38,6 +59,7 @@ export function simulate(inputs: SimulationInputs): SimulationResult {
     summary: {
       buyTerminalWealth,
       rentTerminalWealth,
+      buyTerminalPaper: buyBalanceSheet.paperEquity,
       differential: buyTerminalWealth - rentTerminalWealth,
       breakevenMonth: breakevenPoint ? breakevenPoint.month : null,
       totalInterest: ledger.totals.interest,
@@ -47,6 +69,8 @@ export function simulate(inputs: SimulationInputs): SimulationResult {
       garantie,
       monthlyPayment: schedule.monthlyPayment,
       loan: schedule.loan,
+      buyBalanceSheet,
+      rentBalanceSheet,
       costs: {
         interest: ledger.totals.interest,
         assurance: ledger.totals.assurance,
@@ -64,7 +88,7 @@ export function simulate(inputs: SimulationInputs): SimulationResult {
       },
       iraPaid: ledger.iraAtExit,
       fmgRestitution: garantie.restitution,
-      pfuPaidRent,
+      pfuPaidRent: rentBalanceSheet.pfu,
     },
   };
 }

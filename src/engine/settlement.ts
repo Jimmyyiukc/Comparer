@@ -1,4 +1,11 @@
 import { FRANCE } from '../config/france';
+import type { BalanceSheet } from './types';
+
+/** Montant de PFU (flat tax) dû sur les gains d'un portefeuille. */
+export function pfuOnGains(value: number, costBasis: number, pfuEnabled: boolean): number {
+  if (!pfuEnabled) return 0;
+  return Math.max(0, value - costBasis) * FRANCE.pfuRate.value;
+}
 
 /**
  * Indemnités de remboursement anticipé à la revente :
@@ -18,7 +25,46 @@ export function iraAmount(crd: number, annualLoanRate: number, waived: boolean):
  * les gains étant la valeur moins la base de coût (sommes versées).
  */
 export function portfolioNetOfPfu(value: number, costBasis: number, pfuEnabled: boolean): number {
-  if (!pfuEnabled) return value;
-  const gains = Math.max(0, value - costBasis);
-  return value - gains * FRANCE.pfuRate.value;
+  return value - pfuOnGains(value, costBasis, pfuEnabled);
+}
+
+export interface ExitInputs {
+  /** Actif immobilier (0 pour la location). */
+  property: number;
+  /** Placements bruts. */
+  investments: number;
+  /** Base de coût des placements (sommes versées) pour le calcul du PFU. */
+  investBasis: number;
+  /** Passif : capital restant dû. */
+  crd: number;
+  /** Frais d'agence à la revente = property × taux. */
+  sellingFees: number;
+  ira: number;
+  mainlevee: number;
+  /** Restitution FMG encaissée à la sortie (si le prêt court encore). */
+  fmgRestitution: number;
+  pfuEnabled: boolean;
+}
+
+/**
+ * Assemble le bilan d'un chemin à une date : Actifs − Passif = capitaux
+ * propres sur papier ; capitaux propres nets de sortie après réalisation des
+ * frais (agence, IRA, mainlevée, PFU) et encaissement de la restitution FMG.
+ */
+export function buildBalanceSheet(e: ExitInputs): BalanceSheet {
+  const pfu = pfuOnGains(e.investments, e.investBasis, e.pfuEnabled);
+  const paperEquity = e.property + e.investments - e.crd;
+  const netEquity = paperEquity - e.sellingFees - e.ira - e.mainlevee + e.fmgRestitution - pfu;
+  return {
+    property: e.property,
+    investments: e.investments,
+    mortgage: e.crd,
+    sellingFees: e.sellingFees,
+    ira: e.ira,
+    mainlevee: e.mainlevee,
+    fmgRestitution: e.fmgRestitution,
+    pfu,
+    paperEquity,
+    netEquity,
+  };
 }

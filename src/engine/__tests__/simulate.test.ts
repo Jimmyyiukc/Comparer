@@ -15,21 +15,28 @@ describe('simulation complète', () => {
 
   it('à t0, le locataire détient exactement la mise initiale (apport + frais évités)', () => {
     // valeur = base de coût → aucun gain, donc PFU sans effet à t0
-    expect(result.points[0].rentWealth).toBeCloseTo(result.summary.initialOutlay, 2);
+    expect(result.points[0].rentNetWealth).toBeCloseTo(result.summary.initialOutlay, 2);
+    expect(result.points[0].rentPaperWealth).toBeCloseTo(result.summary.initialOutlay, 2);
     expect(result.summary.initialOutlay).toBeCloseTo(
       inputs.apport + result.summary.notaire.total + result.summary.garantie.upfront + inputs.fraisDossier,
       2,
     );
   });
 
-  it('différentiel = achat − location ; croisement cohérent', () => {
+  it('à t0, le chemin achat démarre en dessous, du montant des frais coulés', () => {
+    const p0 = result.points[0];
+    const fees = result.summary.notaire.total + result.summary.garantie.upfront + inputs.fraisDossier;
+    expect(p0.rentPaperWealth - p0.buyPaperWealth).toBeCloseTo(fees, 2);
+  });
+
+  it('différentiel = achat − location (net de sortie) ; croisement cohérent', () => {
     const { summary, points } = result;
     expect(summary.differential).toBeCloseTo(summary.buyTerminalWealth - summary.rentTerminalWealth, 6);
     if (summary.breakevenMonth !== null) {
       const p = points[summary.breakevenMonth];
-      expect(p.buyWealth).toBeGreaterThanOrEqual(p.rentWealth);
+      expect(p.buyNetWealth).toBeGreaterThanOrEqual(p.rentNetWealth);
       const before = points[summary.breakevenMonth - 1];
-      expect(before.buyWealth).toBeLessThan(before.rentWealth);
+      expect(before.buyNetWealth).toBeLessThan(before.rentNetWealth);
     }
   });
 

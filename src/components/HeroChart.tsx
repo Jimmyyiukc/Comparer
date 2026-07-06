@@ -25,7 +25,8 @@ interface Props {
 interface Datum {
   years: number;
   month: number;
-  buy: number;
+  buyPaper: number;
+  buyNet: number;
   rent: number;
   band: [number, number];
 }
@@ -45,17 +46,21 @@ function HeroTooltip({
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
-  const diff = d.buy - d.rent;
+  const diff = d.buyNet - d.rent;
   return (
     <div className="viz-tooltip">
       <div className="tip-title">{formatDurationMonths(d.month, lang)}</div>
       <div className="tip-row">
         <span className="swatch" style={{ background: colors.buy }} />
-        {t.buy} <span className="val">{fmtEUR(d.buy)}</span>
+        {t.buyPaper} <span className="val">{fmtEUR(d.buyPaper)}</span>
+      </div>
+      <div className="tip-row">
+        <span className="swatch" style={{ background: colors.buy, opacity: 0.5 }} />
+        {t.buyNet} <span className="val">{fmtEUR(d.buyNet)}</span>
       </div>
       <div className="tip-row">
         <span className="swatch" style={{ background: colors.rent }} />
-        {t.rent} <span className="val">{fmtEUR(d.rent)}</span>
+        {t.rentNet} <span className="val">{fmtEUR(d.rent)}</span>
       </div>
       <div className="tip-row">
         <span className="swatch" style={{ background: 'transparent' }} />
@@ -69,7 +74,7 @@ function HeroTooltip({
   );
 }
 
-/** Graphique héros : patrimoine net des deux chemins, mois par mois. */
+/** Graphique héros : patrimoine des deux chemins (bilan comptable), mois par mois. */
 export function HeroChart({ result, deflate, t, lang }: Props) {
   const mode = useMode();
   const colors = PATH_COLORS[mode];
@@ -78,14 +83,17 @@ export function HeroChart({ result, deflate, t, lang }: Props) {
   const data: Datum[] = useMemo(
     () =>
       result.points.map((p) => {
-        const buy = deflate(p.buyWealth, p.month);
-        const rent = deflate(p.rentWealth, p.month);
+        const buyPaper = deflate(p.buyPaperWealth, p.month);
+        const buyNet = deflate(p.buyNetWealth, p.month);
+        const rent = deflate(p.rentNetWealth, p.month);
+        // L'écart ombré sépare les deux patrimoines comparables (nets de sortie).
         return {
           years: p.month / 12,
           month: p.month,
-          buy,
+          buyPaper,
+          buyNet,
           rent,
-          band: [Math.min(buy, rent), Math.max(buy, rent)] as [number, number],
+          band: [Math.min(buyNet, rent), Math.max(buyNet, rent)] as [number, number],
         };
       }),
     [result, deflate],
@@ -149,8 +157,18 @@ export function HeroChart({ result, deflate, t, lang }: Props) {
               tooltipType="none"
             />
             <Line
-              dataKey="buy"
-              name={t.buy}
+              dataKey="buyNet"
+              name={t.buyNet}
+              stroke={colors.buy}
+              strokeWidth={1.5}
+              strokeDasharray="5 4"
+              strokeOpacity={0.6}
+              dot={false}
+              isAnimationActive={false}
+            />
+            <Line
+              dataKey="buyPaper"
+              name={t.buyPaper}
               stroke={colors.buy}
               strokeWidth={2}
               dot={false}
@@ -184,16 +202,22 @@ export function HeroChart({ result, deflate, t, lang }: Props) {
       </div>
       <div className="legend-row">
         <span className="legend-item">
-          <span className="swatch" style={{ background: colors.buy }} /> {t.buyLegend}
+          <span className="swatch" style={{ background: colors.buy }} /> {t.paperLegend}
+        </span>
+        <span className="legend-item">
+          <span
+            className="swatch"
+            style={{
+              background: `repeating-linear-gradient(90deg, ${colors.buy} 0 5px, transparent 5px 9px)`,
+              opacity: 0.7,
+            }}
+          />{' '}
+          {t.netLegend}
         </span>
         <span className="legend-item">
           <span className="swatch" style={{ background: colors.rent }} /> {t.rentLegend}
         </span>
-        {breakeven === null && (
-          <span className="legend-item">
-            {t.noCross(horizonYears)}
-          </span>
-        )}
+        {breakeven === null && <span className="legend-item">{t.noCross(horizonYears)}</span>}
       </div>
     </section>
   );

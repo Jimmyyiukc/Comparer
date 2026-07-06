@@ -2,7 +2,7 @@ import type { AmortizationSchedule, GarantieBreakdown, MonthPoint, SimulationInp
 import { crdAtMonth } from './amortization';
 import { assurancePremium } from './assurance';
 import { rentAtMonth } from './rent';
-import { iraAmount, portfolioNetOfPfu } from './settlement';
+import { buildBalanceSheet, iraAmount } from './settlement';
 
 export interface LedgerTotals {
   interest: number;
@@ -33,15 +33,20 @@ export interface LedgerResult {
 }
 
 /**
- * Registre mensuel : chaque mois, sorties du chemin achat (mensualité,
- * assurance, taxe foncière/12, charges copro, provision travaux, entretien,
- * surcoût PNO) et du chemin location (loyer). Le différentiel est investi
- * chaque mois, côté locataire quand louer est moins cher, côté acheteur
- * sinon, capitalisé au taux de marché mensuel équivalent.
+ * Registre mensuel, formulation comptable (bilan par chemin).
  *
- * Les deux chemins partent de la même richesse initiale : le locataire
- * investit à t0 l'apport + tous les frais d'achat évités (notaire, garantie,
- * dossier) ; l'acheteur les a dépensés.
+ * Chaque mois, budget logement commun du ménage `B = max(sortie_achat, sortie_location)` :
+ * les deux chemins coûtent autant, et le moins cher verse l'excédent
+ * `B − sortie` dans SON PROPRE compte de placements (l'un des deux est nul).
+ *
+ * Bilan du chemin achat : Actifs (bien + placements) − Passif (capital restant
+ * dû). Les frais d'acquisition (notaire, garantie, dossier) sont une dépense
+ * coulée à t0 : le locataire les investit à la place, d'où un patrimoine achat
+ * qui démarre en dessous de la location, de leur montant exact.
+ *
+ * Patrimoine « sur papier » = bilan à cette date, sans frais de revente.
+ * Patrimoine « net de sortie » = on réalise agence + IRA + mainlevée + PFU et
+ * on encaisse la restitution FMG, comme si l'on soldait ce mois-là.
  */
 export function runLedger(
   inputs: SimulationInputs,
@@ -53,11 +58,11 @@ export function runLedger(
   const loanMonths = schedule.rows.length;
   const monthlyReturn = (1 + inputs.investReturn) ** (1 / 12) - 1;
 
-  // Portefeuille locataire : apport + frais évités, investis à t0.
+  // Compte de placements du locataire : apport + frais évités, investis à t0.
   let rentValue = initialOutlay;
   let rentBasis = initialOutlay;
-  // Portefeuille acheteur : différentiels des mois où acheter est moins cher,
-  // apport excédentaire éventuel, FMG restituée en fin de prêt.
+  // Compte de placements de l'acheteur : apport excédentaire éventuel (si l'apport
+  // dépasse le prix), excédents de budget, restitution FMG en fin de prêt.
   const excessApport = Math.max(0, inputs.apport - inputs.price);
   let buyValue = excessApport;
   let buyBasis = excessApport;
@@ -73,8 +78,6 @@ export function runLedger(
     rentPaid: 0,
   };
 
-  const sellingCosts = (value: number) => value * inputs.sellingFeesRate;
-
   const wealthPoint = (month: number): MonthPoint => {
     const propertyValue = inputs.price * (1 + inputs.appreciation) ** (month / 12);
     const crd = crdAtMonth(schedule, month);
@@ -84,18 +87,38 @@ export function runLedger(
     // Caution : FMG restituée à la revente si le prêt court encore ;
     // si le prêt est déjà soldé, elle a été versée (et investie) en fin de prêt.
     const fmgAtSale = month < loanMonths ? garantie.restitution : 0;
-    const buyWealth =
-      propertyValue -
-      sellingCosts(propertyValue) -
-      crd -
-      ira -
-      mainlevee +
-      fmgAtSale +
-      portfolioNetOfPfu(buyValue, buyBasis, inputs.pfuEnabled);
+
+    const buySheet = buildBalanceSheet({
+      property: propertyValue,
+      investments: buyValue,
+      investBasis: buyBasis,
+      crd,
+      sellingFees: propertyValue * inputs.sellingFeesRate,
+      ira,
+      mainlevee,
+      fmgRestitution: fmgAtSale,
+      pfuEnabled: inputs.pfuEnabled,
+    });
+    const rentSheet = buildBalanceSheet({
+      property: 0,
+      investments: rentValue,
+      investBasis: rentBasis,
+      crd: 0,
+      sellingFees: 0,
+      ira: 0,
+      mainlevee: 0,
+      fmgRestitution: 0,
+      pfuEnabled: inputs.pfuEnabled,
+    });
+
     return {
       month,
-      buyWealth,
-      rentWealth: portfolioNetOfPfu(rentValue, rentBasis, inputs.pfuEnabled),
+      buyPaperWealth: buySheet.paperEquity,
+      buyNetWealth: buySheet.netEquity,
+      buyInvest: buyValue,
+      rentPaperWealth: rentSheet.paperEquity,
+      rentNetWealth: rentSheet.netEquity,
+      rentInvest: rentValue,
       buyOutflow: 0,
       rentOutflow: 0,
       rent: 0,
@@ -113,6 +136,8 @@ export function runLedger(
     const row = m <= loanMonths ? schedule.rows[m - 1] : undefined;
     const payment = row?.payment ?? 0;
     const assurance = assurancePremium(schedule, inputs.assuranceRate, inputs.assuranceMode, m);
+    // Taxe foncière : indexée sur la valeur courante du bien (la base cadastrale
+    // suit à long terme le marché), puis sa propre croissance additionnelle.
     const taxeFonciereRate = inputs.price > 0 ? inputs.taxeFonciere / inputs.price : 0;
     const taxeFonciere = (taxeFonciereRate * propertyValue * (1 + inputs.taxeFonciereGrowth) ** yearIndex) / 12;
     const copro = inputs.coproCharges * (1 + inputs.inflation) ** yearIndex;
@@ -133,17 +158,18 @@ export function runLedger(
     totals.pnoDelta += pno;
     totals.rentPaid += rent;
 
-    // Capitalisation mensuelle, puis versement du différentiel en fin de mois.
+    // Budget logement commun : le chemin le moins cher épargne l'excédent dans
+    // son propre compte (l'un des deux versements est nul). Capitalisation
+    // mensuelle d'abord, versement en fin de mois.
+    const budget = Math.max(buyOutflow, rentOutflow);
     rentValue *= 1 + monthlyReturn;
     buyValue *= 1 + monthlyReturn;
-    const diff = buyOutflow - rentOutflow;
-    if (diff >= 0) {
-      rentValue += diff;
-      rentBasis += diff;
-    } else {
-      buyValue += -diff;
-      buyBasis += -diff;
-    }
+    const buyContribution = budget - buyOutflow;
+    const rentContribution = budget - rentOutflow;
+    buyValue += buyContribution;
+    buyBasis += buyContribution;
+    rentValue += rentContribution;
+    rentBasis += rentContribution;
 
     // Fin de prêt avant l'horizon : la restitution FMG est encaissée et investie.
     if (m === loanMonths && garantie.restitution > 0) {

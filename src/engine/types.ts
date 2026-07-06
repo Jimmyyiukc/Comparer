@@ -106,23 +106,68 @@ export interface GarantieBreakdown {
   mainlevee: number;
 }
 
-/** Point mensuel de la simulation (état en fin de mois m, m=0 → instant initial). */
+/**
+ * Point mensuel de la simulation (bilan en fin de mois m, m=0 → instant initial).
+ * Approche comptable : Capitaux propres = Actifs − Passif.
+ */
 export interface MonthPoint {
   month: number;
-  /** Patrimoine net du chemin achat si revente ce mois-ci (EUR). */
-  buyWealth: number;
-  /** Patrimoine net du chemin location (portefeuille net d'impôt) (EUR). */
-  rentWealth: number;
+  /**
+   * Patrimoine sur papier du chemin achat : Actifs (bien + placements) − Passif
+   * (capital restant dû). Sans frais de sortie — c'est le bilan à cette date.
+   */
+  buyPaperWealth: number;
+  /**
+   * Patrimoine net de sortie du chemin achat : patrimoine sur papier moins les
+   * frais réalisés si l'on soldait ce mois-ci (agence, IRA, mainlevée, PFU sur
+   * les gains) plus la restitution FMG le cas échéant.
+   */
+  buyNetWealth: number;
+  /** Placements du chemin achat (actif hors bien), valeur brute. */
+  buyInvest: number;
+  /** Patrimoine sur papier du chemin location = placements bruts. */
+  rentPaperWealth: number;
+  /** Patrimoine net de sortie du chemin location (placements nets de PFU). */
+  rentNetWealth: number;
+  /** Placements du chemin location, valeur brute. */
+  rentInvest: number;
   /** Sorties de trésorerie du mois, chemin achat. */
   buyOutflow: number;
   /** Sorties de trésorerie du mois, chemin location. */
   rentOutflow: number;
   /** Loyer du mois (EUR). */
   rent: number;
-  /** Capital restant dû en fin de mois. */
+  /** Capital restant dû en fin de mois (passif du chemin achat). */
   crd: number;
-  /** Valeur du bien en fin de mois. */
+  /** Valeur de marché du bien en fin de mois (actif). */
   propertyValue: number;
+}
+
+/**
+ * Bilan d'un chemin à une date : Actifs − Passif = Capitaux propres, avec le
+ * détail des frais de sortie réalisés (nuls tant qu'on ne solde pas).
+ */
+export interface BalanceSheet {
+  /** Actif immobilier (valeur de marché du bien) — 0 pour la location. */
+  property: number;
+  /** Actif financier (placements bruts). */
+  investments: number;
+  /** Passif : capital restant dû. */
+  mortgage: number;
+  /** Frais d'agence réalisés à la revente. */
+  sellingFees: number;
+  /** IRA réalisées. */
+  ira: number;
+  /** Mainlevée réalisée (hypothèque avant terme). */
+  mainlevee: number;
+  /** Restitution FMG encaissée à la sortie (si le prêt court encore). */
+  fmgRestitution: number;
+  /** PFU réalisé sur les gains des placements. */
+  pfu: number;
+  /** Capitaux propres sur papier = property + investments − mortgage. */
+  paperEquity: number;
+  /** Capitaux propres nets de sortie. */
+  netEquity: number;
 }
 
 export interface CostTotals {
@@ -142,11 +187,15 @@ export interface CostTotals {
 }
 
 export interface SimulationSummary {
+  /** Patrimoine net de sortie du chemin achat (figure de référence). */
   buyTerminalWealth: number;
+  /** Patrimoine net de sortie du chemin location (figure de référence). */
   rentTerminalWealth: number;
-  /** achat − location */
+  /** Patrimoine sur papier du chemin achat à la sortie (avant frais de revente). */
+  buyTerminalPaper: number;
+  /** achat − location (net de sortie) */
   differential: number;
-  /** Premier mois où le chemin achat ≥ chemin location, ou null. */
+  /** Premier mois où l'achat (net de sortie) ≥ location (net de sortie), ou null. */
   breakevenMonth: number | null;
   totalInterest: number;
   totalRentPaid: number;
@@ -157,6 +206,10 @@ export interface SimulationSummary {
   monthlyPayment: number;
   loan: number;
   costs: CostTotals;
+  /** Bilan du chemin achat à la sortie. */
+  buyBalanceSheet: BalanceSheet;
+  /** Bilan du chemin location à la sortie. */
+  rentBalanceSheet: BalanceSheet;
   /** IRA payées à la revente (0 si prêt soldé ou exonérées). */
   iraPaid: number;
   fmgRestitution: number;
