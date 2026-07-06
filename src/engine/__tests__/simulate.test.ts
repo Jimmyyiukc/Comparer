@@ -71,6 +71,13 @@ describe('simulation complète', () => {
     expect(withPfu.summary.pfuPaidRent).toBeGreaterThan(0);
   });
 
+  it('taxe foncière : elle suit la valeur courante du bien, même sans croissance additionnelle', () => {
+    const base = { ...inputs, holdingYears: 10, taxeFonciereGrowth: 0, appreciation: 0 };
+    const flat = simulate(base);
+    const appreciated = simulate({ ...base, appreciation: 0.04 });
+    expect(appreciated.summary.costs.taxeFonciere).toBeGreaterThan(flat.summary.costs.taxeFonciere);
+  });
+
   it('achat comptant (apport = prix) : pas de prêt, pas de frais de crédit', () => {
     const cash = simulate({ ...inputs, apport: inputs.price });
     expect(cash.summary.loan).toBe(0);

@@ -9,14 +9,17 @@ import { SensitivityHeatmap } from './components/SensitivityHeatmap';
 import { CostBreakdown } from './components/CostBreakdown';
 import { HypothesesPanel } from './components/HypothesesPanel';
 import { Methodologie } from './components/Methodologie';
+import { copy, otherLang, parseLang, type Lang } from './i18n';
 
 export default function App() {
   const [inputs, setInputs] = useState<SimulationInputs>(() => inputsFromSearchParams(window.location.search));
   const [realTerms, setRealTerms] = useState(
     () => new URLSearchParams(window.location.search).get('rt') === '1',
   );
+  const [lang, setLang] = useState<Lang>(() => parseLang(new URLSearchParams(window.location.search).get('lang')));
 
   const result = useMemo(() => simulate(inputs), [inputs]);
+  const t = copy[lang];
 
   // Tout l'état vit dans l'URL : chaque scénario est partageable tel quel.
   const urlTimer = useRef<number | undefined>(undefined);
@@ -25,11 +28,12 @@ export default function App() {
     urlTimer.current = window.setTimeout(() => {
       const params = inputsToSearchParams(inputs);
       if (realTerms) params.set('rt', '1');
+      if (lang !== 'fr') params.set('lang', lang);
       const qs = params.toString();
       window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
     }, 300);
     return () => window.clearTimeout(urlTimer.current);
-  }, [inputs, realTerms]);
+  }, [inputs, realTerms, lang]);
 
   const update = (patch: Partial<SimulationInputs>) => setInputs((prev) => ({ ...prev, ...patch }));
 
@@ -44,32 +48,36 @@ export default function App() {
   return (
     <div className="app">
       <header className="masthead">
-        <h1>Acheter ou louer ?</h1>
+        <button className="language-switch" type="button" aria-label={t.langAria} onClick={() => setLang(otherLang(lang))}>
+          {t.langLabel}
+        </button>
+        <h1>{t.title}</h1>
         <p>
-          Comparaison patrimoniale sur votre horizon : <span className="path-chip buy">acheter</span> une résidence
-          principale à crédit puis revendre, ou <span className="path-chip rent">louer</span> et investir l'apport,
-          les frais évités et chaque euro d'écart mensuel. Registre mensuel, hypothèses françaises sourcées.
-          {realTerms && <strong> Affichage en euros constants.</strong>}
+          {t.intro(realTerms).split(t.buy)[0]}
+          <span className="path-chip buy">{t.buy}</span>
+          {t.intro(realTerms).split(t.buy)[1]?.split(t.rent)[0]}
+          <span className="path-chip rent">{t.rent}</span>
+          {t.intro(realTerms).split(t.rent)[1]}
         </p>
       </header>
 
-      <PrimaryInputs inputs={inputs} onChange={update} />
-      <SummaryStrip result={result} deflate={deflate} />
-      <HeroChart result={result} deflate={deflate} />
+      <PrimaryInputs inputs={inputs} onChange={update} t={t.primary} />
+      <SummaryStrip result={result} deflate={deflate} t={t.summary} lang={lang} />
+      <HeroChart result={result} deflate={deflate} t={t.chart} lang={lang} />
       <HypothesesPanel
         inputs={inputs}
         notaire={result.summary.notaire}
         realTerms={realTerms}
+        t={t.hyp}
         onChange={update}
         onRealTermsChange={setRealTerms}
       />
-      <SensitivityHeatmap inputs={inputs} />
-      <CostBreakdown result={result} />
-      <Methodologie />
+      <SensitivityHeatmap inputs={inputs} t={t.heatmap} />
+      <CostBreakdown result={result} t={t.costs} />
+      <Methodologie t={t.method} />
 
       <footer className="colophon">
-        Outil personnel d'aide à la décision — pas un conseil financier. Moteur déterministe, calculs au centime,
-        état intégralement encodé dans l'URL.
+        {t.footer}
       </footer>
     </div>
   );

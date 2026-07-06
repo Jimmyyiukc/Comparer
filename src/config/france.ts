@@ -219,11 +219,11 @@ export const FRANCE = {
     asOf: '2025-01-01',
   } satisfies SourcedConstant,
 
-  /** Provision gros travaux de copropriété, % annuel de la valeur du bien. */
+  /** Provision additionnelle pour gros travaux, % annuel de la valeur du bien. Les charges de copro couvrent déjà une partie de l'entretien courant. */
   travauxProvisionRateDefault: {
-    value: 0.006,
-    label: 'Provision gros travaux',
-    sourceName: 'Loi ALUR (fonds travaux) + pratique de marché',
+    value: 0.001,
+    label: 'Provision additionnelle gros travaux',
+    sourceName: 'Hypothèse prudente — complément aux charges de copro',
     sourceUrl: 'https://www.service-public.fr/particuliers/vosdroits/F32058',
     asOf: '2025-01-01',
   } satisfies SourcedConstant,

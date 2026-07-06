@@ -1,13 +1,15 @@
 import { FRANCE } from '../config/france';
 import type { NotaireBreakdown, SimulationInputs } from '../engine/types';
+import type { Copy } from '../i18n';
 import { defaultEntretienRate } from '../state/defaults';
-import { fmtEUR, fmtPct } from '../lib/format';
+import { fmtPct } from '../lib/format';
 import { NumberField, Segmented, SliderField, Toggle } from './fields';
 
 interface Props {
   inputs: SimulationInputs;
   notaire: NotaireBreakdown;
   realTerms: boolean;
+  t: Copy['hyp'];
   onChange: (patch: Partial<SimulationInputs>) => void;
   onRealTermsChange: (v: boolean) => void;
 }
@@ -37,43 +39,33 @@ function PctSlider(props: {
   );
 }
 
-/** Panneau « Hypothèses » : replié, il affiche les valeurs courantes en ligne. */
-export function HypothesesPanel({ inputs, notaire, realTerms, onChange, onRealTermsChange }: Props) {
-  const inline = [
-    `Notaire : ${fmtPct(notaire.effectiveRate, 1)} calculé`,
-    `Taux : ${fmtPct(inputs.loanRate, 2)} / ${inputs.loanYears} ans`,
-    `Apport : ${fmtEUR(inputs.apport)}`,
-    `Assurance : ${fmtPct(inputs.assuranceRate, 2)} ${inputs.assuranceMode === 'capitalInitial' ? 'CI' : 'CRD'}`,
-    `Garantie : ${inputs.garantie === 'caution' ? 'caution' : 'hypothèque'}`,
-    `TF : ${fmtEUR(inputs.taxeFonciere)} +${fmtPct(inputs.taxeFonciereGrowth, 1)}/an`,
-    `Copro : ${fmtEUR(inputs.coproCharges)}/mois`,
-    `Loyer : IRL ${fmtPct(inputs.irlGrowth, 1)} · marché ${fmtPct(inputs.marketRentGrowth, 1)}${inputs.encadrement ? ' · encadré' : ''}`,
-    `Appréciation : ${fmtPct(inputs.appreciation, 1)}`,
-    `Rendement : ${fmtPct(inputs.investReturn, 1)}`,
-    `PFU : ${inputs.pfuEnabled ? 'oui' : 'non'}`,
-    inputs.neuf ? 'Neuf' : 'Ancien',
-  ].join('  ·  ');
+/** Panneau « Hypothèses » : les bases sont visibles, les réglages fins sont repliés. */
+export function HypothesesPanel({ inputs, notaire, realTerms, t, onChange, onRealTermsChange }: Props) {
+  const yearsUnit = t.labels.loanYears === 'Durée du prêt' ? 'ans' : 'yrs';
+  const apportRate = inputs.price > 0 ? inputs.apport / inputs.price : 0;
+  const taxeFonciereRate = inputs.price > 0 ? inputs.taxeFonciere / inputs.price : 0;
 
   return (
-    <details className="hypotheses card">
-      <summary>
-        <span className="summary-head">Hypothèses</span>
-        <span className="inline-values">{inline}</span>
-      </summary>
+    <section className="hypotheses card">
+      <div className="hyp-header">
+        <h2>{t.title}</h2>
+        <span className="inline-values">{t.inline(inputs, notaire)}</span>
+      </div>
 
-      <div className="hyp-groups">
+      <div className="hyp-groups basic-hyp-groups">
         <div className="hyp-group">
-          <h3>Financement</h3>
-          <NumberField
-            label="Apport personnel"
-            value={inputs.apport}
-            step={1_000}
-            unit="€"
+          <h3>{t.finance}</h3>
+          <PctSlider
+            label={t.labels.apport}
+            value={apportRate}
+            min={0}
+            max={100}
+            step={1}
             source={FRANCE.apportShareDefault}
-            onChange={(apport) => onChange({ apport })}
+            onChange={(rate) => onChange({ apport: Math.round(inputs.price * rate) })}
           />
           <PctSlider
-            label="Taux nominal du prêt"
+            label={t.labels.loanRate}
             value={inputs.loanRate}
             min={0.5}
             max={7}
@@ -82,99 +74,162 @@ export function HypothesesPanel({ inputs, notaire, realTerms, onChange, onRealTe
             onChange={(loanRate) => onChange({ loanRate })}
           />
           <SliderField
-            label="Durée du prêt"
+            label={t.labels.loanYears}
             value={inputs.loanYears}
             min={FRANCE.loanYearsMin.value}
             max={FRANCE.loanYearsMax.value}
             step={1}
-            unit="ans"
+            unit={t.labels.loanYears === 'Durée du prêt' ? 'ans' : 'yrs'}
             inputWidth={70}
             source={FRANCE.loanYearsDefault}
             onChange={(loanYears) => onChange({ loanYears })}
           />
-          <PctSlider
-            label="Assurance emprunteur (taux annuel)"
-            value={inputs.assuranceRate}
-            min={0}
-            max={1}
-            step={0.01}
-            source={FRANCE.assuranceRateDefault}
-            onChange={(assuranceRate) => onChange({ assuranceRate })}
-          />
-          <Segmented
-            label="Assiette de l'assurance"
-            value={inputs.assuranceMode}
-            options={[
-              { value: 'capitalInitial', label: 'Capital initial' },
-              { value: 'capitalRestantDu', label: 'Capital restant dû' },
-            ]}
-            onChange={(assuranceMode) => onChange({ assuranceMode })}
-          />
-          <Segmented
-            label="Garantie du prêt"
-            value={inputs.garantie}
-            options={[
-              { value: 'caution', label: 'Caution' },
-              { value: 'hypotheque', label: 'Hypothèque' },
-            ]}
-            source={FRANCE.cautionCommissionRate}
-            onChange={(garantie) => onChange({ garantie })}
-          />
-          <Toggle
-            label="IRA négociées (exonérées à la revente)"
-            checked={inputs.iraWaived}
-            source={FRANCE.iraCrdCapRate}
-            onChange={(iraWaived) => onChange({ iraWaived })}
-          />
-          <NumberField
-            label="Frais de dossier"
-            value={inputs.fraisDossier}
-            step={100}
-            unit="€"
-            source={FRANCE.fraisDossierDefault}
-            onChange={(fraisDossier) => onChange({ fraisDossier })}
-          />
-          <Toggle
-            label={`Achat dans le neuf (notaire ≈ ${fmtPct(FRANCE.notaireNeufRate.value, 1)})`}
-            checked={inputs.neuf}
-            source={FRANCE.notaireNeufRate}
-            onChange={(neuf) => onChange({ neuf })}
-          />
-          <p className="note">
-            Frais de notaire calculés : <strong>{fmtEUR(notaire.total)}</strong> ({fmtPct(notaire.effectiveRate, 1)}
-            {inputs.neuf ? ', taux global neuf' : ` — DMTO ${fmtEUR(notaire.dmto)}, émoluments TTC ${fmtEUR(notaire.emolumentsHT + notaire.emolumentsTVA)}, débours ${fmtEUR(notaire.debours)}`}
-            )
-          </p>
         </div>
 
         <div className="hyp-group">
-          <h3>Coûts de propriété</h3>
-          <NumberField
-            label="Taxe foncière annuelle (chiffre réel de l'annonce)"
-            value={inputs.taxeFonciere}
-            step={50}
-            unit="€/an"
+          <h3>{t.ownership}</h3>
+          <PctSlider
+            label={t.labels.taxe}
+            value={taxeFonciereRate}
+            min={0}
+            max={3}
+            step={0.01}
             source={FRANCE.taxeFonciereDefault}
-            onChange={(taxeFonciere) => onChange({ taxeFonciere })}
+            onChange={(rate) => onChange({ taxeFonciere: inputs.price * rate })}
+          />
+          <NumberField
+            label={t.labels.copro}
+            value={inputs.coproCharges}
+            step={10}
+            unit={t.perMonth}
+            source={FRANCE.coproChargesPerM2Year}
+            onChange={(coproCharges) => onChange({ coproCharges })}
+          />
+        </div>
+
+        <div className="hyp-group">
+          <h3>{t.rental}</h3>
+          <PctSlider
+            label={t.labels.irl}
+            value={inputs.irlGrowth}
+            min={0}
+            max={3.5}
+            source={FRANCE.irlGrowthDefault}
+            onChange={(irlGrowth) => onChange({ irlGrowth })}
           />
           <PctSlider
-            label="Croissance de la taxe foncière"
+            label={t.labels.marketRent}
+            value={inputs.marketRentGrowth}
+            min={0}
+            max={6}
+            source={FRANCE.marketRentGrowthDefault}
+            onChange={(marketRentGrowth) => onChange({ marketRentGrowth })}
+          />
+        </div>
+
+        <div className="hyp-group">
+          <h3>{t.marketTax}</h3>
+          <PctSlider
+            label={t.labels.appreciation}
+            value={inputs.appreciation}
+            min={FRANCE.appreciationMin.value * 100}
+            max={FRANCE.appreciationMax.value * 100}
+            source={FRANCE.appreciationDefault}
+            onChange={(appreciation) => onChange({ appreciation })}
+          />
+          <PctSlider
+            label={t.labels.inflation}
+            value={inputs.inflation}
+            min={0}
+            max={6}
+            source={FRANCE.inflationDefault}
+            onChange={(inflation) => onChange({ inflation })}
+          />
+          <Toggle
+            label={t.labels.pfu}
+            checked={inputs.pfuEnabled}
+            source={FRANCE.pfuRate}
+            onChange={(pfuEnabled) => onChange({ pfuEnabled })}
+          />
+          <Toggle
+            label={t.labels.realTerms}
+            checked={realTerms}
+            onChange={onRealTermsChange}
+          />
+        </div>
+      </div>
+
+      <details className="advanced-hyp">
+        <summary>
+          <span>{t.advanced}</span>
+        </summary>
+
+        <div className="hyp-groups">
+          <div className="hyp-group">
+            <h3>{t.finance}</h3>
+            <PctSlider
+              label={t.labels.assuranceRate}
+              value={inputs.assuranceRate}
+              min={0}
+              max={1}
+              step={0.01}
+              source={FRANCE.assuranceRateDefault}
+              onChange={(assuranceRate) => onChange({ assuranceRate })}
+            />
+            <Segmented
+              label={t.labels.assuranceBase}
+              value={inputs.assuranceMode}
+              options={[
+                { value: 'capitalInitial', label: t.labels.capitalInitial },
+                { value: 'capitalRestantDu', label: t.labels.capitalRestantDu },
+              ]}
+              onChange={(assuranceMode) => onChange({ assuranceMode })}
+            />
+            <Segmented
+              label={t.labels.garantie}
+              value={inputs.garantie}
+              options={[
+                { value: 'caution', label: t.labels.caution },
+                { value: 'hypotheque', label: t.labels.hypotheque },
+              ]}
+              source={FRANCE.cautionCommissionRate}
+              onChange={(garantie) => onChange({ garantie })}
+            />
+            <Toggle
+              label={t.labels.ira}
+              checked={inputs.iraWaived}
+              source={FRANCE.iraCrdCapRate}
+              onChange={(iraWaived) => onChange({ iraWaived })}
+            />
+            <NumberField
+              label={t.labels.dossier}
+              value={inputs.fraisDossier}
+              step={100}
+              unit="€"
+              source={FRANCE.fraisDossierDefault}
+              onChange={(fraisDossier) => onChange({ fraisDossier })}
+            />
+            <Toggle
+              label={t.labels.neuf}
+              checked={inputs.neuf}
+              source={FRANCE.notaireNeufRate}
+              onChange={(neuf) => onChange({ neuf })}
+            />
+            <p className="note">{t.notaireNote(notaire, inputs.neuf)}</p>
+          </div>
+
+        <div className="hyp-group">
+          <h3>{t.ownership}</h3>
+          <PctSlider
+            label={t.labels.taxeGrowth}
             value={inputs.taxeFonciereGrowth}
             min={0}
             max={8}
             source={FRANCE.taxeFonciereGrowthDefault}
             onChange={(taxeFonciereGrowth) => onChange({ taxeFonciereGrowth })}
           />
-          <NumberField
-            label="Charges de copropriété courantes"
-            value={inputs.coproCharges}
-            step={10}
-            unit="€/mois"
-            source={FRANCE.coproChargesPerM2Year}
-            onChange={(coproCharges) => onChange({ coproCharges })}
-          />
           <PctSlider
-            label="Provision gros travaux (% de la valeur / an)"
+            label={t.labels.travaux}
             value={inputs.travauxRate}
             min={0}
             max={2}
@@ -183,11 +238,11 @@ export function HypothesesPanel({ inputs, notaire, realTerms, onChange, onRealTe
             onChange={(travauxRate) => onChange({ travauxRate })}
           />
           <Segmented
-            label="Type de bien"
+            label={t.labels.kind}
             value={inputs.propertyKind}
             options={[
-              { value: 'appartement', label: 'Appartement' },
-              { value: 'maison', label: 'Maison' },
+              { value: 'appartement', label: t.labels.apartment },
+              { value: 'maison', label: t.labels.house },
             ]}
             onChange={(propertyKind) =>
               onChange({
@@ -198,7 +253,7 @@ export function HypothesesPanel({ inputs, notaire, realTerms, onChange, onRealTe
             }
           />
           <PctSlider
-            label="Entretien privatif (% de la valeur / an)"
+            label={t.labels.entretien}
             value={inputs.entretienRate}
             min={0}
             max={2.5}
@@ -207,15 +262,15 @@ export function HypothesesPanel({ inputs, notaire, realTerms, onChange, onRealTe
             onChange={(entretienRate) => onChange({ entretienRate })}
           />
           <NumberField
-            label="Surcoût assurance propriétaire (PNO)"
+            label={t.labels.pno}
             value={inputs.pnoDelta}
             step={5}
-            unit="€/mois"
+            unit={t.perMonth}
             source={FRANCE.pnoDeltaDefault}
             onChange={(pnoDelta) => onChange({ pnoDelta })}
           />
           <PctSlider
-            label="Frais d'agence à la revente"
+            label={t.labels.sellingFees}
             value={inputs.sellingFeesRate}
             min={0}
             max={8}
@@ -225,36 +280,20 @@ export function HypothesesPanel({ inputs, notaire, realTerms, onChange, onRealTe
         </div>
 
         <div className="hyp-group">
-          <h3>Location</h3>
-          <PctSlider
-            label="Indexation IRL en cours de bail"
-            value={inputs.irlGrowth}
-            min={0}
-            max={3.5}
-            source={FRANCE.irlGrowthDefault}
-            onChange={(irlGrowth) => onChange({ irlGrowth })}
-          />
+          <h3>{t.rental}</h3>
           <SliderField
-            label="Durée moyenne d'occupation (relocation)"
+            label={t.labels.tenancy}
             value={inputs.tenancyYears}
             min={1}
             max={15}
             step={1}
-            unit="ans"
+            unit={yearsUnit}
             inputWidth={70}
             source={FRANCE.tenancyYearsDefault}
             onChange={(tenancyYears) => onChange({ tenancyYears })}
           />
-          <PctSlider
-            label="Croissance des loyers de marché"
-            value={inputs.marketRentGrowth}
-            min={0}
-            max={6}
-            source={FRANCE.marketRentGrowthDefault}
-            onChange={(marketRentGrowth) => onChange({ marketRentGrowth })}
-          />
           <Toggle
-            label="Encadrement des loyers (Paris) — croissance plafonnée à l'IRL"
+            label={t.labels.rentControl}
             checked={inputs.encadrement}
             source={FRANCE.irlCap}
             onChange={(encadrement) => onChange({ encadrement })}
@@ -262,17 +301,9 @@ export function HypothesesPanel({ inputs, notaire, realTerms, onChange, onRealTe
         </div>
 
         <div className="hyp-group">
-          <h3>Marché & fiscalité</h3>
+          <h3>{t.marketTax}</h3>
           <PctSlider
-            label="Appréciation nominale du bien (scénario)"
-            value={inputs.appreciation}
-            min={FRANCE.appreciationMin.value * 100}
-            max={FRANCE.appreciationMax.value * 100}
-            source={FRANCE.appreciationDefault}
-            onChange={(appreciation) => onChange({ appreciation })}
-          />
-          <PctSlider
-            label="Rendement des placements (net de frais)"
+            label={t.labels.investReturn}
             value={inputs.investReturn}
             min={0}
             max={10}
@@ -280,41 +311,22 @@ export function HypothesesPanel({ inputs, notaire, realTerms, onChange, onRealTe
             onChange={(investReturn) => onChange({ investReturn })}
           />
           <div className="field">
-            <label>Préréglages du rendement</label>
+            <label>{t.labels.presets}</label>
             <span className="preset-chips">
               <button type="button" onClick={() => onChange({ investReturn: FRANCE.investReturnDefault.value })}>
-                Actions monde ({fmtPct(FRANCE.investReturnDefault.value, 1)})
+                {t.labels.worldEquities} ({fmtPct(FRANCE.investReturnDefault.value, 1)})
               </button>
               <button type="button" onClick={() => onChange({ investReturn: FRANCE.livretARate.value })}>
-                Livret A ({fmtPct(FRANCE.livretARate.value, 1)})
+                {t.labels.livretA} ({fmtPct(FRANCE.livretARate.value, 1)})
               </button>
             </span>
           </div>
-          <PctSlider
-            label="Inflation (charges & assurances)"
-            value={inputs.inflation}
-            min={0}
-            max={6}
-            source={FRANCE.inflationDefault}
-            onChange={(inflation) => onChange({ inflation })}
-          />
-          <Toggle
-            label="PFU 30 % sur les gains du portefeuille à la sortie"
-            checked={inputs.pfuEnabled}
-            source={FRANCE.pfuRate}
-            onChange={(pfuEnabled) => onChange({ pfuEnabled })}
-          />
-          <Toggle
-            label="Afficher en euros constants (déflatés de l'inflation)"
-            checked={realTerms}
-            onChange={onRealTermsChange}
-          />
           <p className="note">
-            Plus-value à la revente : <strong>exonérée</strong> — résidence principale. L'appréciation et le
-            rendement sont des axes de scénario, pas des prévisions.
+            {t.saleTaxNote}
           </p>
         </div>
       </div>
-    </details>
+      </details>
+    </section>
   );
 }

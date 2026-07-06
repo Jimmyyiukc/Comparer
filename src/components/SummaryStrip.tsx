@@ -1,15 +1,19 @@
 import type { SimulationResult } from '../engine/types';
-import { fmtEUR, fmtDurationMonths } from '../lib/format';
+import type { Copy, Lang } from '../i18n';
+import { formatDurationMonths } from '../i18n';
+import { fmtEUR } from '../lib/format';
 import { PATH_COLORS, useMode } from '../lib/palette';
 
 interface Props {
   result: SimulationResult;
   /** déflateur appliqué aux montants terminaux (1 = nominal) */
   deflate: (value: number, month: number) => number;
+  t: Copy['summary'];
+  lang: Lang;
 }
 
 /** Les six chiffres clés, toujours visibles. */
-export function SummaryStrip({ result, deflate }: Props) {
+export function SummaryStrip({ result, deflate, t, lang }: Props) {
   const mode = useMode();
   const colors = PATH_COLORS[mode];
   const { summary, inputs } = result;
@@ -20,49 +24,47 @@ export function SummaryStrip({ result, deflate }: Props) {
   const diff = buy - rent;
 
   return (
-    <section className="summary-strip" aria-label="Synthèse">
+    <section className="summary-strip" aria-label={t.aria}>
       <div className="stat-tile">
         <div className="stat-label">
           <span className="stat-dot" style={{ background: colors.buy }} />
-          Patrimoine final — achat
+          {t.buyWealth}
         </div>
         <div className="stat-value">{fmtEUR(buy)}</div>
-        <div className="stat-note">après revente, à {inputs.holdingYears} ans</div>
+        <div className="stat-note">{t.buyNote(inputs.holdingYears)}</div>
       </div>
       <div className="stat-tile">
         <div className="stat-label">
           <span className="stat-dot" style={{ background: colors.rent }} />
-          Patrimoine final — location
+          {t.rentWealth}
         </div>
         <div className="stat-value">{fmtEUR(rent)}</div>
-        <div className="stat-note">portefeuille net {inputs.pfuEnabled ? 'de PFU 30 %' : "d'impôt (PFU off)"}</div>
+        <div className="stat-note">{t.rentNote(inputs.pfuEnabled)}</div>
       </div>
       <div className="stat-tile">
-        <div className="stat-label">Différentiel</div>
+        <div className="stat-label">{t.diff}</div>
         <div className={`stat-value ${diff >= 0 ? 'positive' : 'negative'}`}>
           {diff >= 0 ? '+' : ''}
           {fmtEUR(diff)}
         </div>
-        <div className="stat-note">{diff >= 0 ? "en faveur de l'achat" : 'en faveur de la location'}</div>
+        <div className="stat-note">{t.diffNote(diff >= 0)}</div>
       </div>
       <div className="stat-tile">
-        <div className="stat-label">Croisement</div>
+        <div className="stat-label">{t.breakeven}</div>
         <div className="stat-value">
-          {summary.breakevenMonth !== null ? fmtDurationMonths(summary.breakevenMonth) : '—'}
+          {summary.breakevenMonth !== null ? formatDurationMonths(summary.breakevenMonth, lang) : '—'}
         </div>
-        <div className="stat-note">
-          {summary.breakevenMonth !== null ? "l'achat repasse devant" : "pas de croisement sur l'horizon"}
-        </div>
+        <div className="stat-note">{t.breakevenNote(summary.breakevenMonth !== null)}</div>
       </div>
       <div className="stat-tile">
-        <div className="stat-label">Intérêts payés</div>
+        <div className="stat-label">{t.interest}</div>
         <div className="stat-value">{fmtEUR(summary.totalInterest)}</div>
-        <div className="stat-note">sur {inputs.holdingYears} ans (nominal)</div>
+        <div className="stat-note">{t.interestNote(inputs.holdingYears)}</div>
       </div>
       <div className="stat-tile">
-        <div className="stat-label">Loyers payés</div>
+        <div className="stat-label">{t.rentPaid}</div>
         <div className="stat-value">{fmtEUR(summary.totalRentPaid)}</div>
-        <div className="stat-note">sur {inputs.holdingYears} ans (nominal)</div>
+        <div className="stat-note">{t.rentPaidNote(inputs.holdingYears)}</div>
       </div>
     </section>
   );

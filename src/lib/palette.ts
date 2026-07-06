@@ -18,8 +18,8 @@ export const PATH_COLORS = {
 
 /** Segments du graphique de coûts (catégoriel, ordre fixe, rouge exclu — réservé à la location). */
 export const COST_COLORS = {
-  light: ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e87ba4', '#eb6834'],
-  dark: ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#d55181', '#d95926'],
+  light: ['#6f747c', '#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e87ba4', '#eb6834'],
+  dark: ['#a2a8b0', '#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#d55181', '#d95926'],
 } as const;
 
 const DIVERGING = {

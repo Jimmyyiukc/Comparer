@@ -1,54 +1,56 @@
 import { useMemo } from 'react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { SimulationResult } from '../engine/types';
+import type { Copy } from '../i18n';
 import { fmtEUR, fmtEURCompact } from '../lib/format';
 import { COST_COLORS, PATH_COLORS, useMode } from '../lib/palette';
 
 interface Props {
   result: SimulationResult;
+  t: Copy['costs'];
 }
 
 /** Où l'argent est réellement parti : coûts cumulés de l'achat vs loyers versés. */
-export function CostBreakdown({ result }: Props) {
+export function CostBreakdown({ result, t }: Props) {
   const mode = useMode();
   const segColors = COST_COLORS[mode];
   const pathColors = PATH_COLORS[mode];
   const c = result.summary.costs;
+  const exitCrd = result.points[result.points.length - 1]?.crd ?? 0;
+  const principalRepaid = Math.max(0, result.summary.loan - exitCrd);
 
   const segments = useMemo(
     () => [
-      { key: 'interets', label: 'Intérêts du prêt', value: c.interest },
-      { key: 'assurances', label: 'Assurances (emprunteur + PNO)', value: c.assurance + c.pnoDelta },
+      { key: 'principal', label: t.segments.principal, value: principalRepaid },
+      { key: 'interets', label: t.segments.interets, value: c.interest },
+      { key: 'assurances', label: t.segments.assurances, value: c.assurance + c.pnoDelta },
       {
         key: 'acquisition',
-        label: 'Notaire, garantie & dossier',
+        label: t.segments.acquisition,
         value: c.notaire + c.garantieNet + c.fraisDossier,
       },
-      { key: 'taxeFonciere', label: 'Taxe foncière', value: c.taxeFonciere },
-      { key: 'copro', label: 'Charges de copropriété', value: c.coproCharges },
-      { key: 'travaux', label: 'Travaux & entretien', value: c.travaux + c.entretien },
-      { key: 'revente', label: 'Revente (agence + IRA)', value: c.sellingFees + c.ira },
+      { key: 'taxeFonciere', label: t.segments.taxeFonciere, value: c.taxeFonciere },
+      { key: 'copro', label: t.segments.copro, value: c.coproCharges },
+      { key: 'travaux', label: t.segments.travaux, value: c.travaux + c.entretien },
+      { key: 'revente', label: t.segments.revente, value: c.sellingFees + c.ira },
     ],
-    [c],
+    [c, principalRepaid, t],
   );
 
   const buyTotal = segments.reduce((acc, s) => acc + s.value, 0);
 
   const data = useMemo(() => {
-    const buyRow: Record<string, number | string> = { name: 'Achat' };
+    const buyRow: Record<string, number | string> = { name: t.buyName };
     for (const s of segments) buyRow[s.key] = s.value;
-    return [buyRow, { name: 'Location', loyers: c.totalRentPaid }];
-  }, [segments, c.totalRentPaid]);
+    return [buyRow, { name: t.rentName, loyers: c.totalRentPaid }];
+  }, [segments, c.totalRentPaid, t]);
 
   const surface = 'var(--surface)';
 
   return (
     <section className="card">
-      <h2>Où part l'argent</h2>
-      <p className="card-sub">
-        Coûts cumulés (nominaux) sur {result.inputs.holdingYears} ans — hors remboursement du capital, qui n'est pas
-        un coût mais de l'épargne forcée.
-      </p>
+      <h2>{t.title}</h2>
+      <p className="card-sub">{t.subtitle(result.inputs.holdingYears)}</p>
       <div style={{ width: '100%', height: 130 }}>
         <ResponsiveContainer>
           <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
@@ -100,7 +102,7 @@ export function CostBreakdown({ result }: Props) {
             ))}
             <Bar
               dataKey="loyers"
-              name="Loyers versés"
+              name={t.segments.loyers}
               stackId="a"
               fill={pathColors.rent}
               stroke={surface}
@@ -115,9 +117,9 @@ export function CostBreakdown({ result }: Props) {
         <table className="cost-table">
           <thead>
             <tr>
-              <th>Poste (achat)</th>
-              <th className="num">Montant</th>
-              <th className="num">Part</th>
+              <th>{t.tablePost}</th>
+              <th className="num">{t.amount}</th>
+              <th className="num">{t.share}</th>
             </tr>
           </thead>
           <tbody>
@@ -126,6 +128,7 @@ export function CostBreakdown({ result }: Props) {
                 <td>
                   <span className="row-swatch" style={{ background: segColors[i] }} />
                   {s.label}
+                  {s.key === 'principal' && <span className="row-note"> {t.principalNote}</span>}
                 </td>
                 <td className="num">{fmtEUR(s.value)}</td>
                 <td className="num">{buyTotal > 0 ? `${Math.round((s.value / buyTotal) * 100)} %` : '—'}</td>
@@ -133,7 +136,7 @@ export function CostBreakdown({ result }: Props) {
             ))}
             <tr>
               <td>
-                <strong>Total coûts achat</strong>
+                <strong>{t.totalBuy}</strong>
               </td>
               <td className="num">
                 <strong>{fmtEUR(buyTotal)}</strong>
@@ -143,7 +146,7 @@ export function CostBreakdown({ result }: Props) {
             <tr>
               <td>
                 <span className="row-swatch" style={{ background: pathColors.rent }} />
-                <strong>Total loyers versés</strong>
+                <strong>{t.totalRent}</strong>
               </td>
               <td className="num">
                 <strong>{fmtEUR(c.totalRentPaid)}</strong>

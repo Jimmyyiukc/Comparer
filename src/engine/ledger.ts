@@ -113,7 +113,8 @@ export function runLedger(
     const row = m <= loanMonths ? schedule.rows[m - 1] : undefined;
     const payment = row?.payment ?? 0;
     const assurance = assurancePremium(schedule, inputs.assuranceRate, inputs.assuranceMode, m);
-    const taxeFonciere = (inputs.taxeFonciere * (1 + inputs.taxeFonciereGrowth) ** yearIndex) / 12;
+    const taxeFonciereRate = inputs.price > 0 ? inputs.taxeFonciere / inputs.price : 0;
+    const taxeFonciere = (taxeFonciereRate * propertyValue * (1 + inputs.taxeFonciereGrowth) ** yearIndex) / 12;
     const copro = inputs.coproCharges * (1 + inputs.inflation) ** yearIndex;
     const travaux = (inputs.travauxRate * propertyValue) / 12;
     const entretien = (inputs.entretienRate * propertyValue) / 12;

@@ -10,12 +10,16 @@ import {
   YAxis,
 } from 'recharts';
 import type { SimulationResult } from '../engine/types';
-import { fmtEUR, fmtEURCompact, fmtDurationMonths } from '../lib/format';
+import type { Copy, Lang } from '../i18n';
+import { formatDurationMonths } from '../i18n';
+import { fmtEUR, fmtEURCompact } from '../lib/format';
 import { PATH_COLORS, useMode } from '../lib/palette';
 
 interface Props {
   result: SimulationResult;
   deflate: (value: number, month: number) => number;
+  t: Copy['chart'];
+  lang: Lang;
 }
 
 interface Datum {
@@ -30,28 +34,32 @@ function HeroTooltip({
   active,
   payload,
   colors,
+  t,
+  lang,
 }: {
   active?: boolean;
   payload?: { payload: Datum }[];
   colors: { buy: string; rent: string };
+  t: Copy['chart'];
+  lang: Lang;
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   const diff = d.buy - d.rent;
   return (
     <div className="viz-tooltip">
-      <div className="tip-title">{fmtDurationMonths(d.month)}</div>
+      <div className="tip-title">{formatDurationMonths(d.month, lang)}</div>
       <div className="tip-row">
         <span className="swatch" style={{ background: colors.buy }} />
-        Achat <span className="val">{fmtEUR(d.buy)}</span>
+        {t.buy} <span className="val">{fmtEUR(d.buy)}</span>
       </div>
       <div className="tip-row">
         <span className="swatch" style={{ background: colors.rent }} />
-        Location <span className="val">{fmtEUR(d.rent)}</span>
+        {t.rent} <span className="val">{fmtEUR(d.rent)}</span>
       </div>
       <div className="tip-row">
         <span className="swatch" style={{ background: 'transparent' }} />
-        Écart{' '}
+        {t.diff}{' '}
         <span className="val">
           {diff >= 0 ? '+' : ''}
           {fmtEUR(diff)}
@@ -62,7 +70,7 @@ function HeroTooltip({
 }
 
 /** Graphique héros : patrimoine net des deux chemins, mois par mois. */
-export function HeroChart({ result, deflate }: Props) {
+export function HeroChart({ result, deflate, t, lang }: Props) {
   const mode = useMode();
   const colors = PATH_COLORS[mode];
   const cssVar = (name: string) => `var(${name})`;
@@ -106,11 +114,8 @@ export function HeroChart({ result, deflate }: Props) {
 
   return (
     <section className="card">
-      <h2>Patrimoine net dans le temps</h2>
-      <p className="card-sub">
-        Valeur nette de chaque chemin si l'on soldait tout ce mois-là : revente du bien (frais, capital restant dû,
-        IRA) côté achat, portefeuille net d'impôt côté location.
-      </p>
+      <h2>{t.title}</h2>
+      <p className="card-sub">{t.subtitle}</p>
       <div style={{ width: '100%', height: 340 }}>
         <ResponsiveContainer>
           <ComposedChart data={data} margin={{ top: 12, right: 12, bottom: 4, left: 8 }}>
@@ -119,7 +124,7 @@ export function HeroChart({ result, deflate }: Props) {
               type="number"
               domain={[0, horizonYears]}
               ticks={yearTicks}
-              tickFormatter={(y: number) => `${y} an${y > 1 ? 's' : ''}`}
+              tickFormatter={t.yearTick}
               stroke={cssVar('--baseline')}
               tick={{ fill: cssVar('--ink-3'), fontSize: 12 }}
               tickLine={false}
@@ -131,7 +136,7 @@ export function HeroChart({ result, deflate }: Props) {
               tickLine={false}
               width={62}
             />
-            <Tooltip content={<HeroTooltip colors={colors} />} isAnimationActive={false} />
+            <Tooltip content={<HeroTooltip colors={colors} t={t} lang={lang} />} isAnimationActive={false} />
             <Area
               dataKey="band"
               stroke="none"
@@ -139,27 +144,27 @@ export function HeroChart({ result, deflate }: Props) {
               fillOpacity={0.12}
               isAnimationActive={false}
               activeDot={false}
-              name="Écart"
+              name={t.gap}
               legendType="none"
               tooltipType="none"
             />
             <Line
               dataKey="buy"
-              name="Achat"
+              name={t.buy}
               stroke={colors.buy}
               strokeWidth={2}
               dot={false}
               isAnimationActive={false}
-              label={endLabel('Achat', colors.buy)}
+              label={endLabel(t.buy, colors.buy)}
             />
             <Line
               dataKey="rent"
-              name="Location"
+              name={t.rent}
               stroke={colors.rent}
               strokeWidth={2}
               dot={false}
               isAnimationActive={false}
-              label={endLabel('Location', colors.rent)}
+              label={endLabel(t.rent, colors.rent)}
             />
             {breakeven !== null && (
               <ReferenceLine
@@ -167,7 +172,7 @@ export function HeroChart({ result, deflate }: Props) {
                 stroke={cssVar('--ink-2')}
                 strokeDasharray="4 4"
                 label={{
-                  value: `Croisement : ${fmtDurationMonths(breakeven)}`,
+                  value: t.cross(breakeven),
                   position: 'insideTopLeft',
                   fill: cssVar('--ink-2'),
                   fontSize: 12,
@@ -179,14 +184,14 @@ export function HeroChart({ result, deflate }: Props) {
       </div>
       <div className="legend-row">
         <span className="legend-item">
-          <span className="swatch" style={{ background: colors.buy }} /> Achat (revente nette)
+          <span className="swatch" style={{ background: colors.buy }} /> {t.buyLegend}
         </span>
         <span className="legend-item">
-          <span className="swatch" style={{ background: colors.rent }} /> Location (portefeuille net)
+          <span className="swatch" style={{ background: colors.rent }} /> {t.rentLegend}
         </span>
         {breakeven === null && (
           <span className="legend-item">
-            Pas de croisement sur {horizonYears} ans : la location reste devant sur tout l'horizon.
+            {t.noCross(horizonYears)}
           </span>
         )}
       </div>
