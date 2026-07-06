@@ -1,122 +1,76 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { SimulationInputs } from './engine/types';
+import { simulate } from './engine/simulate';
+import { inputsFromSearchParams, inputsToSearchParams } from './state/urlState';
+import { PrimaryInputs } from './components/PrimaryInputs';
+import { SummaryStrip } from './components/SummaryStrip';
+import { HeroChart } from './components/HeroChart';
+import { SensitivityHeatmap } from './components/SensitivityHeatmap';
+import { CostBreakdown } from './components/CostBreakdown';
+import { HypothesesPanel } from './components/HypothesesPanel';
+import { Methodologie } from './components/Methodologie';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [inputs, setInputs] = useState<SimulationInputs>(() => inputsFromSearchParams(window.location.search));
+  const [realTerms, setRealTerms] = useState(
+    () => new URLSearchParams(window.location.search).get('rt') === '1',
+  );
+
+  const result = useMemo(() => simulate(inputs), [inputs]);
+
+  // Tout l'état vit dans l'URL : chaque scénario est partageable tel quel.
+  const urlTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    window.clearTimeout(urlTimer.current);
+    urlTimer.current = window.setTimeout(() => {
+      const params = inputsToSearchParams(inputs);
+      if (realTerms) params.set('rt', '1');
+      const qs = params.toString();
+      window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+    }, 300);
+    return () => window.clearTimeout(urlTimer.current);
+  }, [inputs, realTerms]);
+
+  const update = (patch: Partial<SimulationInputs>) => setInputs((prev) => ({ ...prev, ...patch }));
+
+  // Affichage en euros constants : déflate un montant du mois m par l'inflation.
+  const deflate = useMemo(() => {
+    if (!realTerms) return (value: number) => value;
+    const inflation = inputs.inflation;
+    return (value: number, month: number = inputs.holdingYears * 12) =>
+      value / (1 + inflation) ** (month / 12);
+  }, [realTerms, inputs.inflation, inputs.holdingYears]) as (value: number, month: number) => number;
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app">
+      <header className="masthead">
+        <h1>Acheter ou louer ?</h1>
+        <p>
+          Comparaison patrimoniale sur votre horizon : <span className="path-chip buy">acheter</span> une résidence
+          principale à crédit puis revendre, ou <span className="path-chip rent">louer</span> et investir l'apport,
+          les frais évités et chaque euro d'écart mensuel. Registre mensuel, hypothèses françaises sourcées.
+          {realTerms && <strong> Affichage en euros constants.</strong>}
+        </p>
+      </header>
 
-      <div className="ticks"></div>
+      <PrimaryInputs inputs={inputs} onChange={update} />
+      <SummaryStrip result={result} deflate={deflate} />
+      <HeroChart result={result} deflate={deflate} />
+      <HypothesesPanel
+        inputs={inputs}
+        notaire={result.summary.notaire}
+        realTerms={realTerms}
+        onChange={update}
+        onRealTermsChange={setRealTerms}
+      />
+      <SensitivityHeatmap inputs={inputs} />
+      <CostBreakdown result={result} />
+      <Methodologie />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      <footer className="colophon">
+        Outil personnel d'aide à la décision — pas un conseil financier. Moteur déterministe, calculs au centime,
+        état intégralement encodé dans l'URL.
+      </footer>
+    </div>
+  );
 }
-
-export default App

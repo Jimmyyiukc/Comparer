@@ -1,32 +1,44 @@
-# React + TypeScript + Vite
+# Acheter ou louer ? — comparateur France
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+SPA 100 % client (React + TypeScript + Vite) qui compare, sur un horizon de détention choisi, le patrimoine
+terminal de deux chemins :
 
-Currently, two official plugins are available:
+- **Achat** : résidence principale à crédit, tous les coûts réels de propriété, revente en fin d'horizon
+  (frais d'agence, capital restant dû, IRA, restitution FMG).
+- **Location** : bien équivalent loué ; l'apport, les frais d'achat évités et chaque écart mensuel de trésorerie
+  sont investis au rendement de marché choisi (PFU 30 % optionnel à la sortie).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Moteur **déterministe à registre mensuel** (aucune approximation annuelle, pas de NPV, pas de Monte Carlo),
+avec analyse de sensibilité (heatmaps appréciation × durée et rendement × durée).
 
-## React Compiler
+## Architecture
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- `src/config/france.ts` — **toutes** les constantes fiscales/marché, chacune `{ value, label, sourceName, sourceUrl, asOf }`.
+  Aucun nombre magique ailleurs (vérifié) ; un futur pays = un fichier frère.
+- `src/engine/` — moteur pur TypeScript, zéro dépendance UI, testé unitairement :
+  amortissement au centime, barème réel des frais de notaire (ancien) + neuf, assurance emprunteur
+  (capital initial / CRD), garantie (caution avec restitution FMG / hypothèque avec mainlevée),
+  loyers à deux régimes (IRL + relocation), registre mensuel, règlement terminal (IRA plafonnées, PFU).
+- `src/state/` — défauts assemblés depuis la config, sérialisation intégrale de l'état dans l'URL
+  (chaque scénario est partageable tel quel).
+- `src/components/` — UI (Recharts + grille CSS pour les heatmaps), libellés français, formats `fr-FR`.
 
-## Expanding the Oxlint configuration
+## Commandes
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev        # serveur de développement
+npm test           # tests unitaires du moteur (Vitest)
+npm run build      # tsc + build de production
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Invariants vérifiés par les tests
+
+- Somme des amortissements mensuels + capital restant dû = prêt initial, **au centime**.
+- Barème notaire contrôlé sur un cas connu à 300 000 € (ancien) : 21 983,10 €.
+- IRA = min(6 mois d'intérêts, 3 % du CRD), les deux branches + exonération.
+- Timing de la restitution FMG (fin de prêt vs revente anticipée, avec capitalisation).
+- Modèle de loyer à deux régimes : paliers IRL, remise au marché à la relocation, encadrement, bouclier 3,5 %.
+
+Hors périmètre v1 (voir la section Méthodologie de l'app) : PTZ, plus-value hors résidence principale,
+rachat de crédit, Monte Carlo, backend.
